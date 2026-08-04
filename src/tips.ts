@@ -19,7 +19,10 @@ import type { TipQueue, PendingTip } from "./queue.js";
 import type { ResolveCache } from "./resolve-cache.js";
 import { resolveAddress } from "./neynar.js";
 import type { CycleState } from "./cycle.js";
-import { allocationForAddress } from "./allocations.js";
+import {
+  allocationForAddress,
+  invalidateAllocationsCache,
+} from "./allocations.js";
 
 export type EnqueueResult =
   | { ok: true; tip: PendingTip }
@@ -184,6 +187,7 @@ export async function processQueueBatch(opts: {
     const txHash = await tipBatch(clients, cfg.tipDistributorAddress, live);
     console.log(`[worker] tipBatch tx ${txHash}`);
     await clients.publicClient.waitForTransactionReceipt({ hash: txHash });
+    invalidateAllocationsCache();
 
     for (const tip of live) {
       queue.remove(tip.castHash);

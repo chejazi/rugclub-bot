@@ -36,3 +36,30 @@ forge script script/DeployTipDistributor.s.sol:DeployTipDistributor \
 Then set `TIP_DISTRIBUTOR_ADDRESS` / `NEXT_PUBLIC_TIP_DISTRIBUTOR_ADDRESS`, fund the operator with ETH for gas, send tip-token inventory to the distributor, and fill Neynar env vars.
 
 Simulation (no broadcast) already succeeded against live Protocol `getCurrentToken()` = `0xc9D906309dC15b4CC15281ae1a361c04a73AFB8e`.
+
+## PM2 (keep the bot running)
+
+From the bot directory on the EC2 host (deps and `.env` already in place):
+
+```bash
+cd /path/to/rugclub/bot
+npm install
+pm2 start npm --name rugclub-bot -- start
+```
+
+Or start the file directly:
+
+```bash
+pm2 start "npx tsx src/index.ts" --name rugclub-bot
+```
+
+PM2 restarts the process if it crashes.
+
+### Useful commands
+
+```bash
+pm2 status
+pm2 logs rugclub-bot
+pm2 restart rugclub-bot
+pm2 stop rugclub-bot
+```

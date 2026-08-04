@@ -10,7 +10,7 @@ import type { CycleState } from "./cycle.js";
 import { enqueueFromCast } from "./tips.js";
 import {
   allocationForAddress,
-  computeAllocations,
+  getAllocationsSnapshot,
 } from "./allocations.js";
 import { castHashToBytes32, isCastUsed } from "./chain.js";
 
@@ -69,7 +69,7 @@ export function createApp(ctx: AppContext) {
 
   app.get("/allocations", async (_req, res) => {
     try {
-      const snap = await computeAllocations({
+      const snap = await getAllocationsSnapshot({
         cfg: ctx.cfg,
         clients: ctx.clients,
         neynar: ctx.neynar,
