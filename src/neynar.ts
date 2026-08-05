@@ -14,10 +14,20 @@ type NeynarUser = {
   username?: string;
   verifications?: string[];
   custody_address?: string;
+  verified_addresses?: {
+    eth_addresses?: string[];
+    primary?: {
+      eth_address?: string | null;
+      sol_address?: string | null;
+    };
+  };
 };
 
+/** Prefer primary ETH, then first verification, then custody. */
 function primaryAddress(user: NeynarUser): Address | null {
-  const v = user.verifications?.[0] ?? user.custody_address;
+  const primaryEth = user.verified_addresses?.primary?.eth_address;
+  const v =
+    primaryEth || user.verifications?.[0] || user.custody_address || null;
   return v ? (v as Address) : null;
 }
 
@@ -127,6 +137,7 @@ export type CastPayload = {
     username?: string;
     verifications?: string[];
     custody_address?: string;
+    verified_addresses?: NeynarUser["verified_addresses"];
   };
   parent_author?: { fid?: number | null };
 };

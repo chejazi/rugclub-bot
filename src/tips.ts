@@ -9,6 +9,7 @@ import {
 } from "./chain.js";
 import {
   fetchCast,
+  primaryAddress,
   publishReply,
   tipperAddressFromAuthor,
   type CastPayload,
@@ -78,11 +79,12 @@ export async function buildTipFromCast(opts: {
       username?: string;
       verifications?: string[];
       custody_address?: string;
+      verified_addresses?: {
+        primary?: { eth_address?: string | null };
+      };
     }> }).users ?? [];
   const parentUser = parentUsers[0];
-  const recipientAddress =
-    (parentUser?.verifications?.[0] as Address | undefined) ??
-    (parentUser?.custody_address as Address | undefined);
+  const recipientAddress = parentUser ? primaryAddress(parentUser) : null;
   if (!recipientAddress) {
     return { ok: false, reason: "recipient_no_address" };
   }
