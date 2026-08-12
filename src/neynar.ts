@@ -39,12 +39,25 @@ export async function fetchUsersByAddresses(
   if (addresses.length === 0) return out;
 
   // SDK: fetchBulkUsersByEthOrSolAddress
-  const res = await client.fetchBulkUsersByEthOrSolAddress({
-    addresses: addresses.map((a) => a.toLowerCase()),
-  });
+  // Neynar returns 404 { code: "NotFound", message: "No users found" } when
+  // none of the addresses map to a Farcaster user — treat as empty, not fatal.
+  let res: unknown;
+  try {
+    res = await client.fetchBulkUsersByEthOrSolAddress({
+      addresses: addresses.map((a) => a.toLowerCase()),
+    });
+  } catch (err) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    const code = (err as { response?: { data?: { code?: string } } })?.response
+      ?.data?.code;
+    if (status === 404 || code === "NotFound") {
+      return out;
+    }
+    throw err;
+  }
 
   // SDK returns a map of address → users (not wrapped in `.users`)
-  const users = res as unknown as Record<string, NeynarUser[]>;
+  const users = res as Record<string, NeynarUser[]>;
   for (const [addr, list] of Object.entries(users)) {
     if (addr === "message" || addr === "code") continue;
     const user = list?.[0];
