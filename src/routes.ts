@@ -2,8 +2,9 @@ import express from "express";
 import type { Address } from "viem";
 import type { Config } from "./config.js";
 import type { ChainClients } from "./chain.js";
-import type { NeynarClient } from "./neynar.js";
+import type { CastPayload, NeynarClient } from "./neynar.js";
 import { fetchCast, resolveAddress } from "./neynar.js";
+import { verifyNeynarWebhookSignature } from "./neynar-webhook.js";
 import type { ResolveCache } from "./resolve-cache.js";
 import type { TipQueue } from "./queue.js";
 import type { CycleState } from "./cycle.js";
@@ -33,6 +34,78 @@ function requireReplaySecret(cfg: Config, req: express.Request): boolean {
 
 export function createApp(ctx: AppContext) {
   const app = express();
+
+  // Raw body required for Neynar HMAC verification — register before express.json().
+  app.post(
+    "/webhook/neynar",
+    express.raw({ type: "application/json", limit: "1mb" }),
+    async (req, res) => {
+      try {
+        const rawBody = req.body as Buffer;
+        if (!Buffer.isBuffer(rawBody)) {
+          res.status(400).json({ error: "invalid_body" });
+          return;
+        }
+
+        if (!ctx.cfg.neynarWebhookSecret) {
+          console.error("[webhook] NEYNAR_WEBHOOK_SECRET not set — rejecting");
+          res.status(503).json({ error: "webhook_secret_not_configured" });
+          return;
+        }
+
+        const signature = req.header("x-neynar-signature");
+        if (
+          !verifyNeynarWebhookSignature(
+            rawBody,
+            signature,
+            ctx.cfg.neynarWebhookSecret,
+          )
+        ) {
+          res.status(401).json({ error: "unauthorized" });
+          return;
+        }
+
+        const body = JSON.parse(rawBody.toString("utf-8")) as {
+          type?: string;
+          data?: CastPayload;
+        };
+
+        if (body.type && body.type !== "cast.created") {
+          res.status(200).json({ ignored: true });
+          return;
+        }
+
+        const cast = body.data;
+        if (!cast?.hash || !cast.author) {
+          res.status(200).json({ ignored: true, reason: "no_cast" });
+          return;
+        }
+
+        const cycle = ctx.getCycle();
+        if (!cycle) {
+          res.status(503).json({ error: "cycle_not_ready" });
+          return;
+        }
+
+        const result = await enqueueFromCast({
+          cast,
+          cycle,
+          cfg: ctx.cfg,
+          clients: ctx.clients,
+          neynar: ctx.neynar,
+          cache: ctx.cache,
+          queue: ctx.queue,
+          ensLookup: ctx.ensLookup,
+        });
+
+        res.status(200).json(result);
+      } catch (err) {
+        console.error("[webhook]", err);
+        res.status(500).json({ error: "webhook_failed" });
+      }
+    },
+  );
+
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", (_req, res) => {
@@ -106,61 +179,6 @@ export function createApp(ctx: AppContext) {
     } catch (err) {
       console.error("[allocations/:address]", err);
       res.status(500).json({ error: "allocation_failed" });
-    }
-  });
-
-  app.post("/webhook/neynar", async (req, res) => {
-    try {
-      if (ctx.cfg.neynarWebhookSecret) {
-        const secret =
-          req.header("x-neynar-signature") ??
-          req.header("x-webhook-secret") ??
-          "";
-        if (secret && secret !== ctx.cfg.neynarWebhookSecret) {
-          if (req.header("x-webhook-secret")) {
-            res.status(401).json({ error: "unauthorized" });
-            return;
-          }
-        }
-      }
-
-      const body = req.body as {
-        type?: string;
-        data?: Parameters<typeof enqueueFromCast>[0]["cast"];
-      };
-
-      if (body.type && body.type !== "cast.created") {
-        res.status(200).json({ ignored: true });
-        return;
-      }
-
-      const cast = body.data;
-      if (!cast?.hash || !cast.author) {
-        res.status(200).json({ ignored: true, reason: "no_cast" });
-        return;
-      }
-
-      const cycle = ctx.getCycle();
-      if (!cycle) {
-        res.status(503).json({ error: "cycle_not_ready" });
-        return;
-      }
-
-      const result = await enqueueFromCast({
-        cast,
-        cycle,
-        cfg: ctx.cfg,
-        clients: ctx.clients,
-        neynar: ctx.neynar,
-        cache: ctx.cache,
-        queue: ctx.queue,
-        ensLookup: ctx.ensLookup,
-      });
-
-      res.status(200).json(result);
-    } catch (err) {
-      console.error("[webhook]", err);
-      res.status(500).json({ error: "webhook_failed" });
     }
   });
 

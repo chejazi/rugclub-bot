@@ -148,7 +148,22 @@ export async function enqueueFromCast(opts: {
   queue: TipQueue;
   ensLookup: (addr: Address) => Promise<string | null>;
 }): Promise<EnqueueResult> {
-  const built = await buildTipFromCast(opts);
+  let verified: CastPayload | undefined;
+  try {
+    verified = await fetchCast(opts.neynar, opts.cast.hash);
+  } catch {
+    return { ok: false, reason: "cast_not_found" };
+  }
+  if (!verified) {
+    return { ok: false, reason: "cast_not_found" };
+  }
+  if (
+    castHashToBytes32(verified.hash) !== castHashToBytes32(opts.cast.hash)
+  ) {
+    return { ok: false, reason: "cast_hash_mismatch" };
+  }
+
+  const built = await buildTipFromCast({ ...opts, cast: verified });
   if (!built.ok) return built;
   if (opts.queue.has(built.tip.castHash)) {
     return { ok: false, reason: "already_queued" };

@@ -26,7 +26,7 @@ npm run dev
 ## Deploy
 
 ```bash
-# From contracts/
+# From rug-contracts/
 PROTOCOL_ADDRESS=0x0b864645E13C2DDd47CbA46FDd918a9f85d11065 \
 TIP_OPERATOR=0x005EF7B305e6CE5465d66607e31516c242FB09b5 \
 forge script script/DeployTipDistributor.s.sol:DeployTipDistributor \
@@ -42,7 +42,7 @@ Simulation (no broadcast) already succeeded against live Protocol `getCurrentTok
 From the bot directory on the EC2 host (deps and `.env` already in place):
 
 ```bash
-cd /path/to/rugclub/bot
+cd /path/to/rugclub/rug-bot
 npm install
 pm2 start npm --name rugclub-bot -- start
 ```
