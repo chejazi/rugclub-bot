@@ -25,6 +25,22 @@ function parseAddressList(raw: string): `0x${string}`[] {
     .map((s) => s.toLowerCase() as `0x${string}`);
 }
 
+function parseOriginList(raw: string): string[] {
+  if (!raw.trim()) return [];
+  return raw
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+const tipBotEnv = (() => {
+  const raw = optional("TIP_BOT_ENV", optional("NODE_ENV", "development")).toUpperCase();
+  if (raw === "PROD" || raw === "PRODUCTION") return "PROD" as const;
+  return "DEV" as const;
+})();
+
+const corsOriginsParsed = parseOriginList(optional("CORS_ORIGINS"));
+
 export const config = {
   port: Number(optional("PORT", "8787")),
   baseRpcUrl: required("BASE_RPC_URL"),
@@ -46,11 +62,17 @@ export const config = {
   /** Lowercase addresses excluded from tip weight / eligibility (comma or whitespace separated). */
   excludeAddresses: parseAddressList(optional("TIP_EXCLUDE_ADDRESSES")),
   /** DEV or PROD — used in Neynar webhook display name. */
-  env: (() => {
-    const raw = optional("TIP_BOT_ENV", optional("NODE_ENV", "development")).toUpperCase();
-    if (raw === "PROD" || raw === "PRODUCTION") return "PROD" as const;
-    return "DEV" as const;
-  })(),
+  env: tipBotEnv,
+  /**
+   * Browser origins allowed to call /resolve and /allocations directly.
+   * Comma/space-separated. In DEV, defaults to localhost:3000 if unset.
+   */
+  corsOrigins:
+    corsOriginsParsed.length > 0
+      ? corsOriginsParsed
+      : tipBotEnv === "DEV"
+        ? ["http://localhost:3000", "http://127.0.0.1:3000"]
+        : [],
 };
 
 export type Config = typeof config;

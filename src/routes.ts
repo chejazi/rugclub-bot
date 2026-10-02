@@ -32,8 +32,35 @@ function requireReplaySecret(cfg: Config, req: express.Request): boolean {
   return header === cfg.replaySecret || query === cfg.replaySecret;
 }
 
+function applyCors(
+  req: express.Request,
+  res: express.Response,
+  origins: string[],
+): boolean {
+  const origin = req.headers.origin;
+  if (!origin) return false;
+  const allowAll = origins.includes("*");
+  if (!allowAll && !origins.includes(origin)) return false;
+  res.setHeader("Access-Control-Allow-Origin", allowAll ? "*" : origin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Max-Age", "86400");
+  return true;
+}
+
 export function createApp(ctx: AppContext) {
   const app = express();
+
+  // Browser clients (rug-app) call /resolve and /allocations directly.
+  app.use((req, res, next) => {
+    applyCors(req, res, ctx.cfg.corsOrigins);
+    if (req.method === "OPTIONS") {
+      res.status(204).end();
+      return;
+    }
+    next();
+  });
 
   // Raw body required for Neynar HMAC verification — register before express.json().
   app.post(
